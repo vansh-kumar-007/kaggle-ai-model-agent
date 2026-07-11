@@ -1,0 +1,53 @@
+You are a Kaggle Grandmaster deciding whether and how to train a machine learning model on the following profiled dataset.
+
+Dataset: <<DATASET_TITLE>>
+Reference: <<DATASET_REF>>
+
+Full data profile:
+<<PROFILE_SUMMARY>>
+
+=== YOUR TASK ===
+First, determine if this dataset has a genuinely usable prediction target -- a column that is NOT an ID, NOT a free-text field, NOT almost entirely unique per row (that's usually an identifier, not a label), and has enough non-missing values to train on. If no such column exists, set "trainable" to false and explain why in "reason_not_trainable" -- do NOT force a target onto data that doesn't have one.
+
+If a usable target exists, decide:
+- problem_type: exactly one of "binary_classification", "multiclass_classification", "regression"
+- target_column: the exact real column name from the profile above (never invent one)
+- algorithm: exactly ONE choice from this list, matched to problem_type:
+    Classification: logistic_regression, random_forest_classifier, gradient_boosting_classifier, xgboost_classifier, lightgbm_classifier, extra_trees_classifier
+    Regression: linear_regression, ridge_regression, random_forest_regressor, gradient_boosting_regressor, xgboost_regressor, lightgbm_regressor, extra_trees_regressor
+  Pick whichever single algorithm is best suited to this specific data's size, dimensionality, and likely nonlinearity -- don't default to the same algorithm every time if the data doesn't call for it.
+- eval_metric: one of "accuracy", "f1_macro", "roc_auc", "rmse", "r2" -- pick the one most appropriate for problem_type and any class imbalance visible in the profile.
+- feature_columns: real column names (from the profile) to use as model inputs.
+- categorical_columns: subset of feature_columns that need categorical encoding.
+- numerical_columns: subset of feature_columns that are numeric as-is (or become numeric after simple parsing, e.g. coordinate strings like "40.71N" -- describe any such parsing needed in preprocessing_notes).
+- time_columns: subset of feature_columns that are dates/timestamps -- these need pd.to_datetime parsing and derived features (year, month, day-of-year, cyclical sin/cos encoding), NOT raw categorical or numerical use. Every column in feature_columns MUST appear in exactly one of categorical_columns, numerical_columns, or time_columns -- none may be left unclassified.
+- columns_to_drop: real column names to explicitly EXCLUDE -- IDs, near-unique identifiers, free-text fields, or anything that would leak the target (e.g. a column only known after the outcome already happened).
+- preprocessing_notes: 1-3 sentences on any cleaning this specific data needs (missing value strategy, encoding approach, outlier handling) -- concrete, not generic.
+- model_title: a catchy, specific, publication-ready title for the Kaggle Model itself (not a generic restatement of the dataset name).
+- model_card_summary: 2-4 sentences describing what this model predicts, on what data, and its intended use -- written for a Kaggle Model card's "Model Summary" section.
+
+Respond with ONLY a single JSON object (no markdown fences, no commentary) matching exactly this structure:
+
+{
+  "dataset_ref": "string, must match the reference above",
+  "dataset_title": "string, must match the title above",
+  "trainable": true,
+  "reason_not_trainable": null,
+  "primary_csv": "string -- filename of the CSV containing the target column",
+  "problem_type": "string or null",
+  "target_column": "string or null",
+  "algorithm": "string or null",
+  "eval_metric": "string or null",
+  "feature_columns": ["list", "of", "column", "names"],
+  "categorical_columns": ["list"],
+  "numerical_columns": ["list"],
+  "time_columns": ["list"],
+  "columns_to_drop": ["list"],
+  "preprocessing_notes": "string",
+  "model_title": "string",
+  "model_card_summary": "string"
+}
+
+If trainable is false, set problem_type, target_column, algorithm, eval_metric, primary_csv to null, leave the list fields empty, and still fill reason_not_trainable with a clear explanation.
+
+Return ONLY the JSON object. No explanation, no markdown code fences, no additional text.

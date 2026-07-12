@@ -1,0 +1,64 @@
+You are a Kaggle Grandmaster writing ONE complete, production-quality Python training script. This is not a notebook -- no markdown, no narrative, just clean, well-commented, fully runnable code.
+
+=== TASK ===
+Dataset: <<DATASET_TITLE>> (<<DATASET_REF>>)
+Problem type: <<PROBLEM_TYPE>>
+Target column: <<TARGET_COLUMN>>
+Algorithm (use EXACTLY this, no substitutions): <<ALGORITHM>>
+Eval metric: <<EVAL_METRIC>> (<<METRIC_DIRECTION>>)
+
+Primary CSV: <<PRIMARY_CSV>>
+Feature columns: <<FEATURE_COLUMNS>>
+Categorical columns (need encoding): <<CATEGORICAL_COLUMNS>>
+Numerical columns (use as-is, or with the parsing described in preprocessing notes): <<NUMERICAL_COLUMNS>>
+Time columns (need pd.to_datetime + derived features -- year/month/day-of-year/cyclical sin-cos encoding, NOT raw use): <<TIME_COLUMNS>>
+Columns to drop entirely (IDs, leakage risks, free text): <<COLUMNS_TO_DROP>>
+
+Preprocessing notes from the planning stage (concrete, dataset-specific -- follow these):
+<<PREPROCESSING_NOTES>>
+
+Full data profile (for exact real column names/dtypes -- never invent a column):
+<<PROFILE_SUMMARY>>
+
+=== ENVIRONMENT ===
+Use the variable names DATASET_DIR and OUTPUT_DIR as pathlib.Path objects throughout your code (e.g. DATASET_DIR / "<<PRIMARY_CSV>>", OUTPUT_DIR / "model.joblib"). You do NOT need to figure out their real values -- whatever you assign to them will be automatically REPLACED with the correct real paths by the pipeline before this script runs, regardless of what you write. Just use these two variable names consistently; don't worry about getting an actual path right.
+
+=== REQUIREMENTS ===
+1. Only use: pandas, numpy, scikit-learn, xgboost, lightgbm, joblib. Import exactly what you need.
+2. Load the CSV, apply the preprocessing described above (categorical encoding, time feature extraction, numerical parsing/cleaning per the notes, drop the specified columns, handle missing values sensibly).
+3. Build the EXACT algorithm specified using its standard scikit-learn-compatible API (e.g. RandomForestClassifier, XGBRegressor, LGBMClassifier, etc. -- use sensible, moderate default hyperparameters; this is not a hyperparameter tuning exercise).
+4. Evaluate via <<CV_FOLDS>>-fold cross-validation using <<CV_SPLITTER>>, scoring with <<EVAL_METRIC>> (use sklearn's built-in scorer name; for rmse use 'neg_root_mean_squared_error' and negate the result back to positive before reporting).
+5. ALSO cross-validate a naive baseline for comparison: DummyClassifier(strategy="most_frequent") for classification, DummyRegressor(strategy="mean") for regression -- same CV splitter, same metric.
+6. After cross-validation, fit ONE final model instance on the FULL preprocessed dataset (all rows) -- this is the artifact that gets saved and published, not any single fold's model.
+7. Save the final fitted model to OUTPUT_DIR / "model.joblib" using joblib.dump().
+8. Save a metrics.json to OUTPUT_DIR with EXACTLY this structure (fill in real computed values):
+{
+  "problem_type": "<<PROBLEM_TYPE>>",
+  "eval_metric": "<<EVAL_METRIC>>",
+  "metric_direction": "<<METRIC_DIRECTION>>",
+  "algorithm": "<<ALGORITHM>>",
+  "cv_folds": <<CV_FOLDS>>,
+  "model_cv_score_mean": <float>,
+  "model_cv_score_std": <float>,
+  "baseline_cv_score_mean": <float>,
+  "baseline_cv_score_std": <float>,
+  "n_samples": <int>,
+  "n_features": <int>
+}
+9. Print a concise human-readable summary at the end (both scores, sample/feature counts).
+10. Set random_state=42 wherever applicable, for reproducibility.
+11. Code must be complete and runnable -- no placeholders, no "# TODO", no pseudo-code.
+12. Handle the target column's own cleaning if needed (e.g. drop rows where target is null) BEFORE splitting into features/target.
+13. For any categorical column needing target-based encoding (high cardinality, where one-hot would be impractical), use sklearn.preprocessing.TargetEncoder (built into scikit-learn, already available -- do NOT write a custom target/mean-encoding class). NEVER fit_transform any encoder that uses the target column (y) on the FULL dataset before cross-validation -- this leaks target information from validation folds into training features and silently inflates the reported CV score into a scientifically invalid number, even though nothing crashes. If combining preprocessing with the model, prefer wrapping everything (encoders + model) in a single sklearn.pipeline.Pipeline and passing that whole pipeline to cross_val_score -- scikit-learn then correctly refits every transformer on only each fold's training data automatically, guaranteeing no leakage.
+14. Use the exact scoring string specified above (scoring='neg_root_mean_squared_error' for rmse, etc.) directly in cross_val_score's scoring= parameter, rather than constructing your own make_scorer with deprecated parameters like squared=False.
+=== OUTPUT FORMAT ===
+Respond using EXACTLY this plain-text format. Do NOT use JSON. Do NOT use markdown code fences. Write code as raw, literal text -- do not escape quotes, backslashes, or newlines.
+
+===SCRIPT_CODE===
+(raw, complete python script)
+===END_SCRIPT===
+===APPROACH_NOTES===
+(1-2 sentences: what preprocessing/modeling choices you made and why)
+===END===
+
+Do not add any text before ===SCRIPT_CODE=== or after ===END===.

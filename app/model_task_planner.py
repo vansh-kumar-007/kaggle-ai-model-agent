@@ -19,7 +19,7 @@ import json
 import logging
 from pathlib import Path
 
-from pydantic import BaseModel, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from kaggle_ai_core.dataset_analyzer import DatasetProfile
 from kaggle_ai_core.nemotron_client import NemotronClient
@@ -47,6 +47,8 @@ VALID_PROBLEM_TYPES = {"binary_classification", "multiclass_classification", "re
 class ModelPlan(BaseModel):
     """Structured plan for whether/how to train a model on one dataset."""
 
+    model_config = ConfigDict(protected_namespaces=())  # allow model_title/model_card_summary field names
+
     dataset_ref: str
     dataset_title: str
     trainable: bool
@@ -68,6 +70,20 @@ class ModelPlan(BaseModel):
     preprocessing_notes: str = ""
     model_title: str = ""
     model_card_summary: str = ""
+
+    @field_validator("problem_type", "algorithm", "eval_metric", mode="before")
+    @classmethod
+    def _normalize_enum_case(cls, value):
+        """
+        Normalize case/whitespace on enum-like fields before validating
+        membership. An LLM writing 'RMSE' instead of 'rmse' means exactly
+        the same thing semantically -- rejecting it and burning a repair
+        round-trip over a trivial case difference wastes a Nemotron call
+        for no real benefit.
+        """
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
 
     @model_validator(mode="after")
     def _validate_trainable_fields(self) -> "ModelPlan":

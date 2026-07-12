@@ -1,0 +1,59 @@
+You are fixing a broken Python ML training script. The script either crashed during execution, or ran successfully but failed a quality check (barely beat or did not beat a naive baseline). Rewrite the ENTIRE script with the problem fixed -- this is a full replacement, not a patch.
+
+=== ORIGINAL TASK ===
+Dataset: <<DATASET_TITLE>> (<<DATASET_REF>>)
+Problem type: <<PROBLEM_TYPE>>
+Target column: <<TARGET_COLUMN>>
+Algorithm (keep using this UNLESS the failure reason is specifically about this algorithm being unsuitable): <<ALGORITHM>>
+Eval metric: <<EVAL_METRIC>> (<<METRIC_DIRECTION>>)
+
+Full data profile (for exact real column names/dtypes -- never invent a column):
+<<PROFILE_SUMMARY>>
+
+=== WHAT WENT WRONG ===
+<<FAILURE_REASON>>
+
+=== THE SCRIPT THAT FAILED ===
+<<PREVIOUS_SCRIPT>>
+
+=== YOUR TASK ===
+Diagnose the root cause and rewrite the complete script with it fixed. Common causes:
+- Crash: a column still string/object dtype when a numeric operation is attempted, wrong column name, unavailable library, target leakage into features causing a crash downstream, shape mismatches.
+- Quality gate failure (ran fine, but didn't meaningfully beat baseline): try different/more hyperparameters for the same algorithm (more estimators, different depth/learning rate, better regularization), better feature engineering (interaction terms, better handling of the categorical/time columns), or if the algorithm genuinely seems mismatched to this data, you may switch to a different algorithm from the SAME family (e.g. swap random_forest_regressor for gradient_boosting_regressor) -- but prefer improving the current approach first.
+
+=== ENVIRONMENT ===
+Use DATASET_DIR and OUTPUT_DIR as pathlib.Path variable names throughout (e.g. DATASET_DIR / "filename.csv", OUTPUT_DIR / "model.joblib"). Whatever you assign to them will be automatically replaced with the correct real paths -- don't worry about getting an actual path value right.
+
+=== REQUIREMENTS (same as before) ===
+1. Only use: pandas, numpy, scikit-learn, xgboost, lightgbm, joblib.
+2. NEVER fit_transform any target-based encoder on the full dataset before cross-validation -- use sklearn.preprocessing.TargetEncoder inside a sklearn.pipeline.Pipeline passed directly to cross_val_score, so scikit-learn refits it per-fold automatically.
+3. Use <<CV_FOLDS>>-fold CV via <<CV_SPLITTER>>, scoring with the exact sklearn scorer string for <<EVAL_METRIC>> (for rmse: 'neg_root_mean_squared_error', then negate to positive).
+4. Also cross-validate a naive baseline (DummyClassifier(strategy="most_frequent") or DummyRegressor(strategy="mean")) with the same CV splitter and metric.
+5. Fit ONE final model on the FULL dataset after CV, save to OUTPUT_DIR / "model.joblib" via joblib.dump().
+6. Save OUTPUT_DIR / "metrics.json" with EXACTLY this structure (fill in real computed values):
+{
+  "problem_type": "<<PROBLEM_TYPE>>",
+  "eval_metric": "<<EVAL_METRIC>>",
+  "metric_direction": "<<METRIC_DIRECTION>>",
+  "algorithm": "string -- the algorithm actually used",
+  "cv_folds": <<CV_FOLDS>>,
+  "model_cv_score_mean": <float>,
+  "model_cv_score_std": <float>,
+  "baseline_cv_score_mean": <float>,
+  "baseline_cv_score_std": <float>,
+  "n_samples": <int>,
+  "n_features": <int>
+}
+7. Print a concise summary at the end. Set random_state=42 wherever applicable. Code must be complete and runnable -- no placeholders.
+
+=== OUTPUT FORMAT ===
+Respond using EXACTLY this plain-text format. Do NOT use JSON. Do NOT use markdown code fences.
+
+===SCRIPT_CODE===
+(raw, complete python script)
+===END_SCRIPT===
+===APPROACH_NOTES===
+(1-2 sentences: what was wrong and what you changed)
+===END===
+
+Do not add any text before ===SCRIPT_CODE=== or after ===END===.

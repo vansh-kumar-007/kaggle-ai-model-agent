@@ -121,7 +121,7 @@ class TrainingScriptGenerator:
         self._client = nemotron_client
         self._prompt_template = PROMPT_TEMPLATE_PATH.read_text(encoding="utf-8")
 
-    def generate(self, plan: ModelPlan, profile: DatasetProfile, dataset_dir: Path, output_dir: Path) -> TrainingScript:
+    def generate(self, plan: ModelPlan, profile_summary: str, dataset_dir: Path, output_dir: Path) -> TrainingScript:
         """
         Generate a complete training script for a trainable ModelPlan.
 
@@ -153,7 +153,7 @@ class TrainingScriptGenerator:
         prompt = prompt.replace("<<TIME_COLUMNS>>", ", ".join(plan.time_columns) or "(none)")
         prompt = prompt.replace("<<COLUMNS_TO_DROP>>", ", ".join(plan.columns_to_drop) or "(none)")
         prompt = prompt.replace("<<PREPROCESSING_NOTES>>", plan.preprocessing_notes)
-        prompt = prompt.replace("<<PROFILE_SUMMARY>>", render_profile_summary(profile))
+        prompt = prompt.replace("<<PROFILE_SUMMARY>>", profile_summary)
         prompt = prompt.replace("<<CV_FOLDS>>", str(CV_FOLDS))
         prompt = prompt.replace("<<CV_SPLITTER>>", _cv_splitter_description(plan.problem_type))
 

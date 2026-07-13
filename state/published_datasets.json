@@ -1,5 +1,7 @@
 {
   "published_refs": [
+    "ahmedshahriarsakib/usa-real-estate-dataset",
+    "berkeleyearth/climate-change-earth-surface-temperature-data",
     "robikscube/hourly-energy-consumption"
   ]
 }

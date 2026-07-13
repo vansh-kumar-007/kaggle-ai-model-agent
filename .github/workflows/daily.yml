@@ -1,0 +1,59 @@
+name: Daily Kaggle Model Publish
+
+on:
+  schedule:
+    - cron: '0 13 * * *'  # 13:00 UTC — 7 hours after notebook-agent's 06:00 UTC run
+  workflow_dispatch: {}
+
+permissions:
+  contents: write  # to commit state/published_datasets.json back to the repo
+
+jobs:
+  publish-model:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360  # GitHub's hard cap; internal budget (5h45m) exits before this fires
+
+    steps:
+      - name: Checkout repository (with submodule)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.CORE_REPO_PAT }}  # needed: default GITHUB_TOKEN can't access the separate private kaggle-ai-core repo
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run pipeline
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+        run: python -m app.main
+
+      - name: Upload run logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-logs-${{ github.run_id }}
+          path: logs/*.json
+          retention-days: 30
+
+      - name: Commit published-datasets state back to repo
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add state/published_datasets.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update published-datasets state [skip ci]"
+            git push
+          else
+            echo "No changes to state/published_datasets.json, skipping commit."
+          fi

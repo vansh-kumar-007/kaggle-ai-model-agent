@@ -59,7 +59,7 @@ class TrainingScriptRepairer:
     def repair(
         self,
         plan: ModelPlan,
-        profile: DatasetProfile,
+        profile_summary: str,
         previous_script: str,
         result: ExecutionResult,
         dataset_dir: Path,
@@ -83,7 +83,7 @@ class TrainingScriptRepairer:
         prompt = prompt.replace("<<ALGORITHM>>", plan.algorithm)
         prompt = prompt.replace("<<EVAL_METRIC>>", plan.eval_metric)
         prompt = prompt.replace("<<METRIC_DIRECTION>>", metric_direction)
-        prompt = prompt.replace("<<PROFILE_SUMMARY>>", render_profile_summary(profile))
+        prompt = prompt.replace("<<PROFILE_SUMMARY>>", profile_summary)
         prompt = prompt.replace("<<FAILURE_REASON>>", failure_reason)
         prompt = prompt.replace("<<PREVIOUS_SCRIPT>>", previous_script)
         prompt = prompt.replace("<<CV_FOLDS>>", str(CV_FOLDS))

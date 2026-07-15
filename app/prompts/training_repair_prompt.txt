@@ -25,11 +25,12 @@ Diagnose the root cause and rewrite the complete script with it fixed. Common ca
 Use DATASET_DIR and OUTPUT_DIR as pathlib.Path variable names throughout (e.g. DATASET_DIR / "filename.csv", OUTPUT_DIR / "model.joblib"). Whatever you assign to them will be automatically replaced with the correct real paths -- don't worry about getting an actual path value right.
 
 === REQUIREMENTS (same as before) ===
-1. Only use: pandas, numpy, scikit-learn, xgboost, lightgbm, joblib.
+1. Only use: pandas, numpy, scikit-learn, xgboost, lightgbm, joblib, cloudpickle.
 2. NEVER fit_transform any target-based encoder on the full dataset before cross-validation -- use sklearn.preprocessing.TargetEncoder inside a sklearn.pipeline.Pipeline passed directly to cross_val_score, so scikit-learn refits it per-fold automatically.
+2a. CRITICAL: the saved model.joblib must be a fully self-contained Pipeline that accepts the ORIGINAL RAW dataframe directly (same columns as the source CSV, minus target/dropped columns) to both .fit() and .predict(). If the failure is a missing-column error during predict() on raw data, the root cause is almost certainly that some preprocessing (date parsing, coordinate parsing, feature engineering) was done as free-standing pandas code before the Pipeline instead of as a Pipeline step. Fix this by wrapping that logic in sklearn.preprocessing.FunctionTransformer and making it the first step of the Pipeline, so raw data can flow through predict() without any external preprocessing.
 3. Use <<CV_FOLDS>>-fold CV via <<CV_SPLITTER>>, scoring with the exact sklearn scorer string for <<EVAL_METRIC>> (for rmse: 'neg_root_mean_squared_error', then negate to positive).
 4. Also cross-validate a naive baseline (DummyClassifier(strategy="most_frequent") or DummyRegressor(strategy="mean")) with the same CV splitter and metric.
-5. Fit ONE final model on the FULL dataset after CV, save to OUTPUT_DIR / "model.joblib" via joblib.dump().
+5. Fit ONE final model on the FULL dataset after CV, save to OUTPUT_DIR / "model.joblib" via cloudpickle.dump(final_pipeline, open(OUTPUT_DIR / "model.joblib", "wb")) -- NOT joblib.dump(). Required because the Pipeline includes FunctionTransformer-wrapped custom functions; plain joblib/pickle only stores a name reference that breaks when loaded in a different process.
 6. Save OUTPUT_DIR / "metrics.json" with EXACTLY this structure (fill in real computed values):
 {
   "problem_type": "<<PROBLEM_TYPE>>",

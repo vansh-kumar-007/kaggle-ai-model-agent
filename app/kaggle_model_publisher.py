@@ -17,6 +17,9 @@ from pathlib import Path
 from kaggle_ai_core.kaggle_client import KaggleClient
 from kaggle_ai_core.utils.file_utils import add_published_ref
 from kaggle_ai_core.utils.helpers import slugify
+from app.companion_notebook_builder import build_companion_notebook
+import nbformat
+
 
 from app.model_task_planner import ModelPlan
 
@@ -51,9 +54,31 @@ FRAMEWORK_MAP = {
     "lightgbm_regressor": "other",
 }
 
+def _capitalize_framework(framework: str) -> str:
+    """
+    Kaggle displays the framework segment of a Model Instance URL with its
+    first letter capitalized, rest unchanged (confirmed empirically in Step
+    1's discovery test: submitted "scikitLearn" -> URL showed "ScikitLearn").
+    Deriving this deterministically from OUR OWN submitted value is more
+    robust than trying to read it back out of the API response, since that
+    response's "url" field has been observed to come back unpopulated on at
+    least one real call -- an intermittent gap on Kaggle's side we can't
+    rely on.
+    """
+    if not framework:
+        return framework
+    return framework[0].upper() + framework[1:]
+
 
 def _build_model_card(plan: ModelPlan, metrics: dict) -> str:
-    """Build the Model's description markdown from REAL computed metrics, not just LLM claims."""
+    """
+    Build the Model's description markdown from REAL computed metrics,
+    not just LLM claims. Follows the exact four-heading structure Kaggle's
+    own model_initialize template specifies (Model Summary, Model
+    Characteristics, Data Overview, Evaluation Results) -- the previous
+    version was missing "Data Overview" entirely, likely why Kaggle's
+    documentation-completeness check kept flagging the model as incomplete.
+    """
     return (
         f"# Model Summary\n\n{plan.model_card_summary}\n\n"
         f"# Model Characteristics\n\n"
@@ -62,6 +87,10 @@ def _build_model_card(plan: ModelPlan, metrics: dict) -> str:
         f"- **Target column:** {plan.target_column}\n"
         f"- **Training samples:** {metrics['n_samples']:,}\n"
         f"- **Features:** {metrics['n_features']}\n\n"
+        f"# Data Overview\n\n"
+        f"Trained on the Kaggle dataset [{plan.dataset_ref}](https://www.kaggle.com/datasets/{plan.dataset_ref}). "
+        f"{plan.preprocessing_notes}\n\n"
+        f"**Feature columns used:** {', '.join(plan.feature_columns) if plan.feature_columns else '(see training script)'}\n\n"
         f"# Evaluation Results\n\n"
         f"Evaluated via {metrics['cv_folds']}-fold cross-validation, compared against a naive baseline.\n\n"
         f"| | Model | Baseline |\n"
@@ -78,7 +107,7 @@ def _build_usage_section(plan: ModelPlan) -> str:
         f"# Training Data\n\nTrained on the Kaggle dataset: {plan.dataset_ref}\n\n"
         f"# Model Inputs\n\nFeature columns: {', '.join(plan.feature_columns)}\n\n"
         f"# Model Outputs\n\nPredicts: {plan.target_column} ({plan.problem_type})\n\n"
-        f"# Model Usage\n\n```python\nimport joblib\nmodel = joblib.load('model.joblib')\npredictions = model.predict(X)\n```\n\n"
+        f"# Model Usage\n\n```python\nimport cloudpickle\nwith open('model.joblib', 'rb') as f:\n    model = cloudpickle.load(f)\npredictions = model.predict(X)  # accepts the raw dataframe directly\n```\n\n"
         f"# Fine-tuning\n\nNot applicable -- this is a fitted classical ML estimator, not a fine-tunable base model.\n\n"
         f"# Changelog\n\nInitial version, generated and trained automatically.\n"
     )
@@ -183,10 +212,71 @@ class KaggleModelPublisher:
         )
 
         logger.info("Creating Kaggle Model Instance (uploading model.joblib + metrics.json)...")
-        self._client.create_model_instance(instance_dir)
+        instance_url = self._client.create_model_instance(instance_dir)
+        if not instance_url or instance_url == "None":
+            logger.warning(
+                "Kaggle did not return a usable instance URL (got: %r) -- this is a known "
+                "intermittent gap in the API response, not fatal; deriving the framework "
+                "segment deterministically instead.", instance_url,
+            )
+        display_framework = _capitalize_framework(framework)
 
         add_published_ref(published_refs_path, plan.dataset_ref)
 
         model_url = f"https://www.kaggle.com/models/{self._username}/{model_slug}"
         logger.info("Published successfully: %s", model_url)
+
+        is_ready = self._client.wait_for_model_instance_ready(
+            self._username, model_slug, display_framework, "default",
+        )
+        if not is_ready:
+            logger.warning(
+                "Skipping companion notebook: model instance never became resolvable in time. "
+                "The model itself is published and unaffected."
+            )
+            return model_url
+
+        try:
+            notebook_url = self._publish_companion_notebook(plan, model_slug, display_framework)
+            logger.info("Companion notebook published: %s", notebook_url)
+        except Exception:
+            logger.exception("Companion notebook publish failed; model was still published successfully.")
+
         return model_url
+
+    def _publish_companion_notebook(self, plan: ModelPlan, model_slug: str, framework: str) -> str:
+        """Build and push a small usage-demo notebook, linked to the model and source dataset."""
+        notebook_dir = self._publish_workdir / model_slug / "notebook"
+        if notebook_dir.exists():
+            shutil.rmtree(notebook_dir)
+        notebook_dir.mkdir(parents=True)
+
+        nb = build_companion_notebook(plan, plan.primary_csv)
+        nbformat.write(nb, notebook_dir / "notebook.ipynb")
+
+        # Truncate the BASE title first, then append the suffix -- doing it in
+        # the opposite order (concat then truncate to 50) can cut the suffix
+        # off mid-word, producing a mangled slug.
+        suffix = " - Usage Example"
+        notebook_title = plan.model_title[: 50 - len(suffix)].rstrip() + suffix
+        notebook_slug = slugify(notebook_title, max_length=60)
+        model_source = f"{self._username}/{model_slug}/{framework}/default/1"
+
+        kernel_metadata = {
+            "id": f"{self._username}/{notebook_slug}",
+            "title": notebook_title,
+            "code_file": "notebook.ipynb",
+            "language": "python",
+            "kernel_type": "notebook",
+            "is_private": False,
+            "enable_gpu": False,
+            "enable_internet": True,
+            "dataset_sources": [plan.dataset_ref],
+            "model_sources": [model_source],
+            "competition_sources": [],
+            "kernel_sources": [],
+        }
+        (notebook_dir / "kernel-metadata.json").write_text(json.dumps(kernel_metadata, indent=2), encoding="utf-8")
+
+        self._client.push_kernel(notebook_dir)
+        return f"https://www.kaggle.com/code/{self._username}/{notebook_slug}"

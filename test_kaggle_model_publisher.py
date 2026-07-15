@@ -36,6 +36,10 @@ def main() -> None:
     parser.add_argument("--title", type=str, default="Hourly Energy Demand Forecaster (LightGBM)")
     parser.add_argument("--summary", type=str, default="Predicts hourly energy demand (MW) from temporal features using LightGBM, trained on 121K observations.")
     parser.add_argument("--target", type=str, default="AEP_MW")
+    parser.add_argument("--primary-csv", type=str, required=True, help="Real CSV filename the model was trained on, e.g. healthcare_dataset.csv")
+    parser.add_argument("--problem-type", type=str, default="regression", dest="problem_type")
+    parser.add_argument("--algorithm", type=str, default="lightgbm_regressor")
+    parser.add_argument("--eval-metric", type=str, default="rmse", dest="eval_metric")
     args = parser.parse_args()
 
     ensure_directories()
@@ -46,11 +50,11 @@ def main() -> None:
         dataset_ref=args.dataset_ref,
         dataset_title=args.dataset_ref,
         trainable=True,
-        primary_csv="unused_for_publish",
-        problem_type="regression",
+        primary_csv=args.primary_csv,
+        problem_type=args.problem_type,
         target_column=args.target,
-        algorithm="lightgbm_regressor",
-        eval_metric="rmse",
+        algorithm=args.algorithm,
+        eval_metric=args.eval_metric,
         feature_columns=[],
         model_title=args.title,
         model_card_summary=args.summary,
